@@ -104,6 +104,12 @@ def test_accounts_are_hashed_and_records_are_isolated(tmp_path) -> None:
     assert database.list_offers(owner_id=bob, db_path=db_path) == []
     assert database.get_offer(offer_id, db_path=db_path, owner_id=bob) is None
     assert database.get_dashboard_stats(db_path=db_path, owner_id=bob)["saved_offers"] == 0
+    try:
+        database.save_calculation(600, 20, offer_id, db_path, owner_id=bob)
+    except ValueError as error:
+        assert "not found for this account" in str(error)
+    else:
+        raise AssertionError("An account must not link a calculation to another user's offer.")
 
     try:
         database.save_offer(

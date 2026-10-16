@@ -237,6 +237,12 @@ def save_calculation(
     owner_id: str = "local",
 ) -> None:
     with connect(db_path) as connection:
+        if offer_id is not None:
+            owned_offer = connection.execute(
+                "SELECT 1 FROM offers WHERE id = ? AND user_id = ?", (offer_id, owner_id)
+            ).fetchone()
+            if owned_offer is None:
+                raise ValueError("Offer was not found for this account.")
         connection.execute(
             "INSERT INTO calculations (offer_id, transaction_amount, estimated_cashback, user_id) VALUES (?, ?, ?, ?)",
             (
