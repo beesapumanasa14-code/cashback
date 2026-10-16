@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cashback Clarity Assistant</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #17251e; background: #f3f7f4; }
+    body { margin: 0; padding: 36px 16px; }
+    main { max-width: 760px; margin: 0 auto; }
+    h1 { margin-bottom: 8px; color: #17633c; }
+    .intro { margin-top: 0; color: #53645a; }
+    section, .notice { background: white; border: 1px solid #dce7df; border-radius: 12px; padding: 22px; margin: 18px 0; }
+    label { display: block; font-weight: 600; margin: 14px 0 6px; }
+    textarea, input { box-sizing: border-box; width: 100%; border: 1px solid #b9c9bf; border-radius: 7px; padding: 10px; font: inherit; }
+    textarea { min-height: 130px; resize: vertical; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+    button { margin-top: 18px; border: 0; border-radius: 7px; padding: 11px 16px; background: #17633c; color: white; font: inherit; font-weight: 700; cursor: pointer; }
+    button:hover { background: #104c2d; }
+    .notice { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .error { border-color: #e9b7b7; background: #fff5f5; color: #8e2020; }
+    .result { border-color: #b7d9c2; background: #f4fbf6; }
+    .fine-print { color: #53645a; font-size: .9rem; }
+    @media (max-width: 540px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Cashback Clarity Assistant</h1>
+    <p class="intro">Understand offer terms and estimate your cashback. Results are estimates, not guarantees.</p>
+
+    <section>
+      <h2>Analyze an offer</h2>
+      <form method="post">
+        <label for="offer">Offer details</label>
+        <textarea id="offer" name="offer" placeholder="Paste the offer terms here">{{ values.offer if values else "" }}</textarea>
+        <button type="submit" name="action" value="analyze">Analyze offer</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>Calculate cashback</h2>
+      <form method="post">
+        <div class="grid">
+          <div>
+            <label for="transaction_amount">Transaction amount (Rs.)</label>
+            <input id="transaction_amount" name="transaction_amount" type="number" min="0" step="any" required value="{{ values.transaction_amount if values else '' }}">
+          </div>
+          <div>
+            <label for="cashback_percentage">Cashback percentage</label>
+            <input id="cashback_percentage" name="cashback_percentage" type="number" min="0" step="any" required value="{{ values.cashback_percentage if values else '' }}">
+          </div>
+          <div>
+            <label for="maximum_cashback">Maximum cashback (Rs.)</label>
+            <input id="maximum_cashback" name="maximum_cashback" type="number" min="0" step="any" required value="{{ values.maximum_cashback if values else '' }}">
+          </div>
+          <div>
+            <label for="minimum_transaction">Minimum transaction (Rs.)</label>
+            <input id="minimum_transaction" name="minimum_transaction" type="number" min="0" step="any" required value="{{ values.minimum_transaction if values else '' }}">
+          </div>
+        </div>
+        <button type="submit" name="action" value="calculate">Calculate cashback</button>
+      </form>
+    </section>
+
+    {% if error %}
+      <div class="notice error" role="alert">{{ error }}</div>
+    {% endif %}
+    {% if result %}
+      <section class="notice result" aria-live="polite">
+        <h2>{{ "Offer analysis" if action == "analyze" else "Calculation result" }}</h2>
+        {{ result }}
+      </section>
+    {% endif %}
+
+    <p class="fine-print">Verify all terms with the offer provider before making a purchase. Never share card numbers, passwords, PINs, or OTPs.</p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+cashback.db
+cashback.db-shm
+cashback.db-wal
+uploads/
+.env
+.env.*
+!.env.example
+*.tmp

@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.git/
+.venv/
+venv/
+.pytest_cache/
+*.db
+*.db-shm
+*.db-wal
+data/
+uploads/
+.env
+.env.*
