@@ -107,34 +107,44 @@ Ollama is mocked in unit tests; tests do not require a model or network AI call.
 - The local Ollama runtime is checked before analysis; errors do not generate
   fabricated analysis.
 
-## Public deployment
+## Public deployment (Streamlit Community Cloud)
 
-This repository includes a Docker configuration for Hugging Face Spaces.
-Creating a public Space requires an authenticated Hugging Face account:
+The source repository is published at
+https://github.com/beesapumanasa14-code/cashback. For free Streamlit Community
+Cloud hosting:
 
-1. Install/use the Hugging Face CLI and run `hf auth login` locally.
-2. Create a new Space with the Docker SDK and push this project to that Space's
-   repository.
-3. Configure `HOSTED_PUBLIC=true` in Space variables so the app displays a
-   prominent hosted-data warning.
-4. Only set `OLLAMA_PULL_MODEL=true` after checking the exact model name and
-   the Space's disk, memory, and startup limits.
-5. Configure persistent storage for `/app/data` if records must survive a
-   container restart.
+1. Sign in to https://share.streamlit.io/ with the GitHub account that can
+   access the repository.
+2. Create an app from `beesapumanasa14-code/cashback`, branch `main`, file
+   `main.py`, or start at the
+   [pre-filled deployment page](https://share.streamlit.io/deploy?repository=beesapumanasa14-code/cashback&branch=main&mainModule=main.py).
+3. In the app's **Settings → Secrets**, set:
 
-The container does not download Gemma by default. The configured
-`gemma4:e2b` model on the development machine occupies about 4.6 GB; public
-free-tier runtime limits may be insufficient. Without a compatible model,
-account, storage, tracker, and calculator features still work, while AI
-analysis reports that the model is unavailable.
+   ```toml
+   HOSTED_PUBLIC = "true"
+   ```
 
-**Public hosting is not local-only.** The application processes submitted
-offer text and screenshots on the hosting provider's infrastructure; the
-local model runs inside that host's container. User accounts isolate records
-in the app database, but hosting providers control the underlying server and
-storage. The application does not encrypt SQLite/evidence at rest. Do not
-submit sensitive information to a host you do not trust. Hosting storage may
-be ephemeral unless persistent storage is configured.
+4. Deploy and wait for the first build. The public URL is assigned by
+   Streamlit after the app starts.
+
+This deployment runs the app without a local Ollama server or Gemma model.
+Sign-in, calculations, saved offers, and investigations work; AI analysis
+will show a clear Ollama-unavailable message. Connecting `OLLAMA_HOST` to
+another server requires a separately hosted, trusted Ollama service with
+`gemma4:e2b`, network access, and appropriate security. Keep that endpoint
+private; do not expose Ollama directly to the internet.
+
+**Public hosting is not local-only.** Offer text, screenshots, account data,
+and investigations are processed and stored on the hosting provider's
+infrastructure. User accounts separate app records, but the app does not
+encrypt the SQLite database or evidence at rest. Free hosted filesystems may
+be ephemeral and reset on restart/redeploy. Do not enter sensitive information
+or use a password from another service. The sign-in page displays this notice.
+
+The repository also includes a Docker configuration for other platforms. The
+container does not download Gemma by default. The configured `gemma4:e2b`
+model on the development machine occupies about 4.6 GB; confirm a host's disk,
+memory, and storage limits before enabling `OLLAMA_PULL_MODEL=true`.
 
 To build/run the Docker container locally:
 
@@ -143,9 +153,9 @@ docker build -t cashback-clarity .
 docker run --rm -p 7860:7860 -v cashback-data:/app/data cashback-clarity
 ```
 
-The app does not create a public URL or a tunnel automatically. A deployment
-URL is available only after an authenticated hosting account creates and
-starts the Space successfully.
+The app does not create a public URL or a tunnel automatically. Streamlit
+Community Cloud assigns a URL only after you authorize GitHub access and
+successfully create the hosted app.
 
 ## Limitations
 

@@ -594,6 +594,7 @@ def settings_page() -> None:
     st.write("Your records are stored in the configured SQLite database and scoped to your account.")
     st.warning(
         "Passwords are stored as salted hashes. Offer text and evidence are not encrypted at rest. "
+        "When hosted, these files reside on the hosting provider's infrastructure. "
         "Do not enter payment passwords, PINs, OTPs, CVVs, or full card numbers."
     )
     if os.environ.get("HOSTED_PUBLIC", "").lower() == "true":
@@ -631,6 +632,12 @@ def settings_page() -> None:
 def authentication_page() -> None:
     render_header()
     st.subheader("Sign in to your private workspace")
+    st.warning(
+        "Public-hosting privacy notice: if you use this app on a hosted site, offer text, screenshots, "
+        "account information, and investigations are processed and stored on the hosting provider's "
+        "infrastructure. They are not stored only on your device. The app does not encrypt stored "
+        "records at rest. Avoid sensitive details and never enter payment credentials."
+    )
     st.caption(
         "Create an account to keep your saved offers and investigations separate from other users. "
         "Usernames are public identifiers; choose a unique password of at least 12 characters."
