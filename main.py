@@ -1,16 +1,16 @@
 """Streamlit interface for the local Cashback Clarity AI application."""
 
 import json
+import os
 import uuid
 from datetime import date
-from decimal import Decimal
 from pathlib import Path
 
 import streamlit as st
 
 import database
 from model import OfferAnalysisError, analyze_offer, check_ollama, validate_analysis
-from ocr_utils import MAX_IMAGE_BYTES, OCRUnavailableError, extract_text, validate_image
+from ocr_utils import OCRUnavailableError, extract_text, validate_image
 from tools import calculate_cashback, check_eligibility, parse_offer_date, to_decimal
 
 DISCLAIMER = (
@@ -169,6 +169,7 @@ def save_offer_button(title: str, offer_text: str, analysis: dict, key: str) -> 
                 title or analysis.get("facts", {}).get("title") or "Untitled offer",
                 offer_text,
                 analysis,
+                owner_id=st.session_state["authenticated_user"],
             )
             st.success(f"Offer saved on this computer (reference {offer_id[:8]}).")
         except (ValueError, database.sqlite3.Error, OSError) as exception:
@@ -178,7 +179,7 @@ def save_offer_button(title: str, offer_text: str, analysis: dict, key: str) -> 
 def dashboard() -> None:
     st.subheader("Your dashboard")
     try:
-        stats = database.get_dashboard_stats()
+        stats = database.get_dashboard_stats(owner_id=st.session_state["authenticated_user"])
     except database.sqlite3.Error as exception:
         st.error(f"Could not load dashboard data: {exception}")
         return
@@ -314,6 +315,7 @@ def before_you_pay() -> None:
                 database.save_calculation(
                     st.session_state["before_amount_value"],
                     cashback.cashback,
+                    owner_id=st.session_state["authenticated_user"],
                 )
                 st.success("Estimate saved. It is not a record of cashback received.")
             except (database.sqlite3.Error, OSError) as exception:
@@ -356,7 +358,10 @@ def calculator_page() -> None:
             st.caption(result.message)
         if st.button("Save estimate locally", key="calculator_save"):
             try:
-                database.save_calculation(st.session_state["calculator_amount"], result.cashback)
+                database.save_calculation(
+                    st.session_state["calculator_amount"], result.cashback,
+                    owner_id=st.session_state["authenticated_user"],
+                )
                 st.success("Estimate saved locally.")
             except (database.sqlite3.Error, OSError) as exception:
                 st.error(f"Estimate could not be saved: {exception}")
@@ -366,7 +371,7 @@ def calculator_page() -> None:
 def saved_offers_page() -> None:
     st.subheader("Saved offers")
     try:
-        offers = database.list_offers()
+        offers = database.list_offers(owner_id=st.session_state["authenticated_user"])
     except (database.sqlite3.Error, json.JSONDecodeError) as exception:
         st.error(f"Saved offers could not be loaded: {exception}")
         return
@@ -409,6 +414,7 @@ def saved_offers_page() -> None:
             database.save_offer(
                 offer["title"], st.session_state["saved_offer_text"], analysis,
                 status=new_status, offer_id=offer["id"],
+                owner_id=st.session_state["authenticated_user"],
             )
             st.success("Offer updated.")
             st.rerun()
@@ -420,6 +426,7 @@ def saved_offers_page() -> None:
             database.save_offer(
                 offer["title"], st.session_state["saved_offer_text"], analysis,
                 status=new_status, offer_id=offer["id"],
+                owner_id=st.session_state["authenticated_user"],
             )
             st.success("Offer reanalyzed and updated.")
             st.rerun()
@@ -427,7 +434,7 @@ def saved_offers_page() -> None:
             st.error(str(exception))
     if controls[2].button("Delete offer", key="saved_offer_delete"):
         try:
-            database.delete_offer(offer["id"])
+            database.delete_offer(offer["id"], owner_id=st.session_state["authenticated_user"])
             st.success("Offer deleted.")
             st.rerun()
         except database.sqlite3.Error as exception:
@@ -452,7 +459,7 @@ def investigations_page() -> None:
     st.subheader("Missing cashback tracker")
     st.caption("Investigation statuses and records are managed by you; the app does not contact a provider.")
     try:
-        investigations = database.list_investigations()
+        investigations = database.list_investigations(owner_id=st.session_state["authenticated_user"])
     except database.sqlite3.Error as exception:
         st.error(f"Investigations could not be loaded: {exception}")
         return
@@ -487,7 +494,7 @@ def investigations_page() -> None:
                     "transaction_amount": amount, "expected_cashback": expected,
                     "actual_cashback": actual, "transaction_reference": reference,
                     "notes": notes, "evidence_path": stored,
-                })
+                }, owner_id=st.session_state["authenticated_user"])
                 st.success("Investigation saved on this device.")
                 st.rerun()
             except (ValueError, OCRUnavailableError, database.sqlite3.Error, OSError) as exception:
@@ -540,7 +547,8 @@ def investigations_page() -> None:
                 "expected_cashback": expected, "actual_cashback": actual,
                 "transaction_reference": reference, "notes": notes, "status": status,
                 "evidence_path": stored or item["evidence_path"],
-            }, investigation_id=item["id"])
+            }, investigation_id=item["id"],
+                owner_id=st.session_state["authenticated_user"])
             if stored and item["evidence_path"]:
                 database.delete_evidence_file(item["evidence_path"])
             st.success("Investigation updated.")
@@ -551,7 +559,9 @@ def investigations_page() -> None:
             st.error(f"Investigation could not be updated: {exception}")
     if delete_clicked:
         try:
-            database.delete_investigation(item["id"])
+            database.delete_investigation(
+                item["id"], owner_id=st.session_state["authenticated_user"]
+            )
             st.success("Investigation and its local evidence were deleted.")
             st.rerun()
         except (database.sqlite3.Error, OSError) as exception:
@@ -581,11 +591,17 @@ def settings_page() -> None:
     st.subheader("Settings and privacy")
     st.write(f"**Database file:** `{database.DB_PATH}`")
     st.write(f"**Evidence folder:** `{database.EVIDENCE_DIR}`")
-    st.write("Offer text, images, investigation records, and calculations are processed or stored locally.")
+    st.write("Your records are stored in the configured SQLite database and scoped to your account.")
     st.warning(
-        "Local SQLite files and evidence are not encrypted by this application. Protect your Windows account "
-        "and device. Do not enter passwords, PINs, OTPs, CVVs, or full card numbers."
+        "Passwords are stored as salted hashes. Offer text and evidence are not encrypted at rest. "
+        "Do not enter payment passwords, PINs, OTPs, CVVs, or full card numbers."
     )
+    if os.environ.get("HOSTED_PUBLIC", "").lower() == "true":
+        st.error(
+            "This is a public hosted service. Submitted offer text, screenshots, and investigation records "
+            "are processed and stored on the hosting provider's infrastructure, not your computer. "
+            "The host may use ephemeral storage unless persistent storage is configured."
+        )
     if st.button("Check local Ollama connection"):
         with st.spinner("Checking Ollama on this computer..."):
             status = check_ollama()
@@ -594,11 +610,79 @@ def settings_page() -> None:
         else:
             st.warning(status["message"])
     st.caption("No payment is initiated and no bank or payment provider is contacted.")
+    with st.expander("Delete my account and all my data"):
+        st.warning("This permanently deletes your offers, calculations, investigations, evidence, and account.")
+        with st.form("delete_account"):
+            confirmation = st.text_input("Type your username to confirm")
+            confirmed = st.form_submit_button("Delete account and data")
+        if confirmed:
+            username = st.session_state["authenticated_user"]
+            if confirmation.strip().lower() != username:
+                st.error("The username did not match.")
+            else:
+                try:
+                    database.delete_user(username)
+                    st.session_state.clear()
+                    st.rerun()
+                except (database.sqlite3.Error, OSError) as exception:
+                    st.error(f"Account deletion could not be completed: {exception}")
 
+
+def authentication_page() -> None:
+    render_header()
+    st.subheader("Sign in to your private workspace")
+    st.caption(
+        "Create an account to keep your saved offers and investigations separate from other users. "
+        "Usernames are public identifiers; choose a unique password of at least 12 characters."
+    )
+    sign_in, sign_up = st.tabs(["Sign in", "Create account"])
+    with sign_in:
+        with st.form("sign_in_form"):
+            username = st.text_input("Username", key="sign_in_username")
+            password = st.text_input("Password", type="password", key="sign_in_password")
+            submitted = st.form_submit_button("Sign in", type="primary")
+        if submitted:
+            try:
+                account = database.verify_user(username, password)
+                if account:
+                    st.session_state["authenticated_user"] = account
+                    st.rerun()
+                st.error("Username or password is incorrect.")
+            except database.sqlite3.Error as exception:
+                st.error(f"Sign-in is unavailable because the database could not be read: {exception}")
+    with sign_up:
+        with st.form("sign_up_form"):
+            username = st.text_input("Choose a username", key="sign_up_username")
+            password = st.text_input("Choose a password (12+ characters)", type="password", key="sign_up_password")
+            confirm_password = st.text_input("Confirm password", type="password", key="sign_up_confirm")
+            submitted = st.form_submit_button("Create private account", type="primary")
+        if submitted:
+            if password != confirm_password:
+                st.error("The passwords do not match.")
+            else:
+                try:
+                    account = database.create_user(username, password)
+                    st.session_state["authenticated_user"] = account
+                    st.rerun()
+                except (ValueError, database.sqlite3.Error) as exception:
+                    st.error(f"Account could not be created: {exception}")
+    st.caption(
+        "There is no password reset or email recovery. Keep your password safe. "
+        "Never reuse a payment, banking, or email password."
+    )
+
+
+if not st.session_state.get("authenticated_user"):
+    authentication_page()
+    st.stop()
 
 render_header()
 with st.sidebar:
     st.markdown("### Cashback Clarity AI")
+    st.caption(f"Signed in as **{st.session_state['authenticated_user']}**")
+    if st.button("Sign out"):
+        st.session_state.clear()
+        st.rerun()
     section = st.radio(
         "Navigate",
         (

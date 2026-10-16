@@ -1,45 +1,51 @@
+---
+title: Cashback Clarity AI
+sdk: docker
+app_port: 7860
+---
+
 # Cashback Clarity AI
 
 Understand the offer. Know the conditions. Estimate your cashback.
 
-A local-first Streamlit application that analyzes cashback terms with a local
-Ollama/Gemma model, checks explicit conditions deterministically, estimates
-cashback with decimal arithmetic, and stores offers and user-managed
-investigations in SQLite. It does not initiate payments or contact providers.
+A Streamlit application that analyzes cashback terms with a local Ollama/Gemma
+model, checks explicit conditions deterministically, estimates cashback with
+decimal arithmetic, and stores offers and user-managed investigations in
+SQLite. It does not initiate payments or contact providers.
 
 ## Features
 
-- Dashboard counts and activity from the local database; estimates are never
-  presented as money received.
-- Analyze pasted offer text or PNG/JPEG screenshots using optional local OCR.
+- Real dashboard counts and recent activity from SQLite.
+- Analyze pasted text or PNG/JPEG screenshots with optional local OCR.
 - Review and edit extracted JSON facts before using them.
-- Before You Pay checker for offer conditions, transaction eligibility,
-  estimated cashback, effective cost, and unresolved mandatory rules.
-- Independent percentage/fixed cashback calculator; missing rates are not
-  invented and a missing cap is not treated as zero.
-- Search, edit, reanalyze, and delete saved offers; status is unknown until
-  you or known dates establish it.
-- Create, update, and delete missing-cashback investigations, save optional
-  local evidence, and prepare a support-message draft.
-- Local-only AI requests, database, and screenshots. No cloud AI API is used.
+- Before You Pay checks eligibility, estimates cashback/effective cost, and
+  identifies unresolved mandatory rules.
+- Independent percentage/fixed cashback calculator. Missing rates are not
+  invented; a missing cap is not treated as zero.
+- Search, edit, reanalyze, and delete saved offers.
+- Create, update, and delete missing-cashback investigations; save local
+  evidence and prepare a support-message draft.
+- User accounts with salted PBKDF2-SHA256 password hashes; offers,
+  calculations, investigations, and evidence are scoped to the signed-in user.
 
 ## Architecture
 
-- `main.py`: Streamlit pages and workflows.
-- `tools.py`: Decimal calculator and deterministic eligibility rules.
+- `main.py`: Streamlit interface, account sign-in, and workflows.
+- `tools.py`: Decimal calculator, date parsing, and deterministic eligibility.
 - `model.py`: Ollama availability, dynamic `SKILLS.md` loading, structured
-  response parsing, and normalization.
-- `database.py`: parameterized SQLite operations and evidence deletion.
+  response parsing, and validation.
+- `database.py`: account/password operations, scoped SQLite persistence, and
+  evidence deletion.
 - `ocr_utils.py`: local image validation and Tesseract OCR.
-- `SKILLS.md`: instructions loaded at runtime and sent with offer text to the
-  local model. The loader also checks `skills.md` on case-sensitive systems.
-- `tests/`: pytest checks for calculations, eligibility, AI parsing, OCR
-  validation, database operations, and app startup.
+- `SKILLS.md`: rules loaded at runtime and sent with offer text to Gemma. The
+  loader also checks `skills.md` on case-sensitive systems.
+- `tests/`: pytest coverage for calculations, eligibility, model parsing,
+  database/account isolation, screenshot validation, and app startup.
 
-## Install and run locally on Windows
+## Run locally on Windows
 
-Open PowerShell in this project folder. Use an existing virtual environment if
-you have one, or create one:
+Open PowerShell in this project folder. Reuse an existing virtual environment
+or create one:
 
 ```powershell
 python -m venv .venv
@@ -47,8 +53,7 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-The app's calculator, saved offers, and tracker do not require Ollama. To use
-local AI, install Ollama separately, then verify its executable and model:
+Launch Ollama separately to use AI. Verify the exact model before downloading:
 
 ```powershell
 ollama --version
@@ -56,28 +61,28 @@ ollama list
 ollama run gemma4:e2b
 ```
 
-`gemma4:e2b` is the default configured name. Check that the exact model is
-available in your Ollama installation before downloading anything. Model
-downloads can be large; the application never downloads a model for you. If
-Ollama uses a non-default endpoint/model, set `OLLAMA_HOST` and `OLLAMA_MODEL`.
+Model downloads can be large; the application never downloads one
+automatically. If Ollama uses another endpoint/model, set `OLLAMA_HOST` and
+`OLLAMA_MODEL`.
 
-Start the application:
+Run the application:
 
 ```powershell
 python -m streamlit run main.py
 ```
 
-Open **http://localhost:8501** (or **http://127.0.0.1:8501**) in a browser.
-The Streamlit server is bound to the local machine by default.
+Open **http://localhost:8501** or **http://127.0.0.1:8501**. Create a
+username (3–32 letters/numbers/dot/underscore/hyphen) and a unique password
+of at least 12 characters. Passwords are not recoverable by email; there is
+no password-reset service. Do not reuse a banking, payment, or email password.
 
 ## OCR on Windows
 
-Image preview and validation use Pillow. OCR also requires the Tesseract
-executable installed on Windows and available on `PATH`, in addition to the
-Python `pytesseract` package installed from `requirements.txt`. Restart the
-terminal after installing Tesseract. If it is unavailable, the app displays
-setup guidance and continues to support pasted/edited text. Screenshots must
-be valid PNG/JPEG files no larger than 5 MB.
+Pillow validates and previews images. OCR also needs the Tesseract executable
+installed on Windows and available on `PATH`, plus `pytesseract` from
+`requirements.txt`. Restart the terminal after installing Tesseract. If it is
+unavailable, the app gives setup guidance and manual text input remains
+available. Screenshots must be PNG/JPEG and at most 5 MB.
 
 ## Tests
 
@@ -85,57 +90,70 @@ be valid PNG/JPEG files no larger than 5 MB.
 python -m pytest -q
 ```
 
-All Ollama tests use a mock; the suite does not need a running model or make
-network AI calls.
+Ollama is mocked in unit tests; tests do not require a model or network AI call.
 
 ## Storage and privacy
 
-- SQLite database: `cashback.db` in this project folder by default.
-- Investigation evidence: `uploads/evidence/` in this project folder.
-- Set `CASHBACK_DB_PATH` or `CASHBACK_EVIDENCE_DIR` to use another local path.
-- Local files are not encrypted by this application. Protect your Windows
-  account/device and delete records/evidence when no longer needed.
-- Never enter passwords, PINs, OTPs, CVVs, or full payment-card numbers.
-- Offer text and screenshots stay on this computer when running locally.
-- The local Ollama runtime is checked before analysis; failures are shown in
-  the UI and do not fabricate analysis.
+- SQLite: `cashback.db` in the project folder by default.
+- Evidence: `uploads/evidence/` in the project folder.
+- Override locations with `CASHBACK_DB_PATH` and `CASHBACK_EVIDENCE_DIR`.
+- User passwords are stored as salted PBKDF2 hashes, never plaintext.
+- All user records are scoped to the signed-in account. Sign-out clears
+  Streamlit session state; account deletion removes that user's records and
+  evidence.
+- Local SQLite/evidence are not encrypted at rest. Protect your device and
+  delete records when no longer needed.
+- Never enter payment passwords, PINs, OTPs, CVVs, or complete card numbers.
+- The local Ollama runtime is checked before analysis; errors do not generate
+  fabricated analysis.
 
 ## Public deployment
 
-The app is local-first. Opening `localhost` does not create a public URL. The
-included Docker configuration is compatible with platforms that run Docker
-containers (the previous README described Hugging Face Spaces), but a hosted
-deployment needs your own hosting account, repository permissions, and
-platform configuration. No deployment URL or hosting account is provisioned
-by this project.
+This repository includes a Docker configuration for Hugging Face Spaces.
+Creating a public Space requires an authenticated Hugging Face account:
 
-To build and run the container locally:
+1. Install/use the Hugging Face CLI and run `hf auth login` locally.
+2. Create a new Space with the Docker SDK and push this project to that Space's
+   repository.
+3. Configure `HOSTED_PUBLIC=true` in Space variables so the app displays a
+   prominent hosted-data warning.
+4. Only set `OLLAMA_PULL_MODEL=true` after checking the exact model name and
+   the Space's disk, memory, and startup limits.
+5. Configure persistent storage for `/app/data` if records must survive a
+   container restart.
+
+The container does not download Gemma by default. The configured
+`gemma4:e2b` model on the development machine occupies about 4.6 GB; public
+free-tier runtime limits may be insufficient. Without a compatible model,
+account, storage, tracker, and calculator features still work, while AI
+analysis reports that the model is unavailable.
+
+**Public hosting is not local-only.** The application processes submitted
+offer text and screenshots on the hosting provider's infrastructure; the
+local model runs inside that host's container. User accounts isolate records
+in the app database, but hosting providers control the underlying server and
+storage. The application does not encrypt SQLite/evidence at rest. Do not
+submit sensitive information to a host you do not trust. Hosting storage may
+be ephemeral unless persistent storage is configured.
+
+To build/run the Docker container locally:
 
 ```powershell
 docker build -t cashback-clarity .
 docker run --rm -p 7860:7860 -v cashback-data:/app/data cashback-clarity
 ```
 
-The container starts Ollama but does **not** download Gemma by default. To
-intentionally download the configured model inside the container, set
-`OLLAMA_PULL_MODEL=true` and verify model availability, disk, memory, and
-platform limits first. Model download/runtime resource requirements can make
-free public hosting unsuitable. A hosted application processes the data on
-that hosting provider's infrastructure; do not submit sensitive offer or
-investigation details to an untrusted host. Free-container databases may be
-ephemeral unless you configure persistent storage.
-
-For a temporary public URL to a local app, use a trusted tunnel provider only
-after reviewing its privacy/security terms; that exposes your local server to
-the internet. The application itself does not create a tunnel.
+The app does not create a public URL or a tunnel automatically. A deployment
+URL is available only after an authenticated hosting account creates and
+starts the Space successfully.
 
 ## Limitations
 
-- AI-extracted terms can be wrong; inspect the original offer and edit the
-  extracted facts.
-- Eligibility is based only on explicit rules and details you provide. It is
-  not official approval, and unknown mandatory rules remain unresolved.
-- Offer dates are displayed as extracted text, not independently verified.
-- OCR accuracy depends on image quality and installed Tesseract language data.
-- Investigations and support messages are local drafts; the app never submits
-  a complaint or confirms cashback with a provider.
+- AI-extracted conditions can be wrong; inspect the original offer and edit
+  the extracted facts.
+- Eligibility is based only on explicit rules and user input; it is not
+  provider confirmation.
+- Dates are shown as extracted and are not independently verified.
+- OCR accuracy depends on image quality and Tesseract language data.
+- Investigations and support messages are user-managed drafts. The app does
+  not contact a provider or submit a complaint.
